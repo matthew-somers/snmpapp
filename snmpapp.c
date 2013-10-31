@@ -1,141 +1,143 @@
 #include <net-snmp/net-snmp-config.h>
 #include <net-snmp/net-snmp-includes.h>
 #include <string.h>
+#include <unistd.h>
+#define SECONDSTOMONITOR 10
 
 /*
  Authors: Matthew Somers and Erik Holden for CS166.
- Line 70 is the most important one here so far.
- Heavily based on the example from:
+ Line 77 is the most important one here so far.
+ Based on the example from:
  http://www.net-snmp.org/wiki/index.php/TUT:Simple_Application
 */
+
+/*
+    TODO:
+    Determine how many interfaces exist in a particular MIB.
+    Set up arguments from spec.
+    Find ipNeighbors, whatever that means.
+    Find a way to refresh monitoring data faster (different oid?).
+    Represent monitored data in graph.
+    Make tables for interfaces and ipNeighbors.
+    Analyze accuracy report for extra credit.
+*/
+
+netsnmp_pdu *makepdu(char myoid[]);
 
 int main(int argc, char ** argv)
 {
     netsnmp_session session, *ss;
-    netsnmp_pdu *pdu;
     netsnmp_pdu *response;
-
-    oid anOID[MAX_OID_LEN];
-    size_t anOID_len;
-
     netsnmp_variable_list *vars;
     int status;
-    int count=1;
+    int i;
+    char icounter;
 
-    /*
-     * Initialize the SNMP library
-     */
+    //Initialize the SNMP library
     init_snmp("snmpapp");
 
-    /*
-     * Initialize a "session" that defines who we're going to talk to
-     */
-    snmp_sess_init( &session );                   /* set up defaults */
+    //Initialize a "session" that defines who we're going to talk to
+    snmp_sess_init( &session );
+    //set up defaults
     session.peername = strdup("localhost");
 
     
-/* we'll use the insecure (but simplier) SNMPv1 */
+    //we'll use the insecure (but simplier) SNMPv1
+    //set the SNMP version number
+    session.version = SNMP_VERSION_1;
 
-    /* set the SNMP version number */
-    session.version = SNMP_VERSION_2c;
-
-    /* set the SNMPv1 community name used for authentication */
+    //set the SNMPv1 community name used for authentication
     session.community = "public";
     session.community_len = strlen(session.community);
 
-/* SNMPv1 */
-
-    /*
-     * Open the session
-     */
+    //SNMPv1
+    //Open the session
     SOCK_STARTUP;
-    ss = snmp_open(&session);                     /* establish the session */
+    ss = snmp_open(&session);
 
-    if (!ss) {
-      snmp_sess_perror("ack", &session);
-      SOCK_CLEANUP;
-      exit(1);
+    //establish the session
+    if (!ss) 
+    {
+        snmp_sess_perror("ack", &session);
+        SOCK_CLEANUP;
+        exit(1);
     }
-    
-    /*
-     * Create the PDU for the data for our request.
-     *   1) We're going to SNMP_MSG_GET or SNMP_MSG_GETNEXT
-     */
-    pdu = snmp_pdu_create(SNMP_MSG_GET);
-    anOID_len = MAX_OID_LEN;
 
-    /*
-     *  These are alternatives to the 'snmp_parse_oid' call above,
-     *    e.g. specifying the OID by name rather than numerically.
-     */
-    //read_objid("wlan0", anOID, &anOID_len);
+    //get interfaces loop-------------------------------
+    for (icounter = '1'; icounter <= '3'; icounter++)
+    {
+        char myoid[] = "ifDescr. ";
+        myoid[8] = icounter;
 
-int i;
-for (i = 0; i < 1; i++)
-{
-    //this one seems like the simplest
-    get_node("ifInOctets.3", anOID, &anOID_len);
-
-    snmp_add_null_var(pdu, anOID, anOID_len);
-  
-    /*
-     * Send the Request out.
-     */
-    status = snmp_synch_response(ss, pdu, &response);
-
-    /*
-     * Process the response.
-     */
-    if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) {
-      /*
-       * SUCCESS: Print the result variables
-       */
-
-      for(vars = response->variables; vars; vars = vars->next_variable)
-        print_variable(vars->name, vars->name_length, vars);
-
-
-      /* manipuate the information ourselves */
-/*
-      for(vars = response->variables; vars; vars = vars->next_variable) {
-        if (vars->type == ASN_OCTET_STR) {
-	  char *sp = (char *)malloc(1 + vars->val_len);
-	  memcpy(sp, vars->val.string, vars->val_len);
-	  sp[vars->val_len] = '\0';
-          printf("value #%d is a string: %s\n", count++, sp);
-	  free(sp);
-	}
-        else
-          printf("value #%d is NOT a string! Ack!\n", count++);
-      }
-    } else {
-      /*
-       * FAILURE: print what went wrong!
-       */
-/*
-      if (status == STAT_SUCCESS)
-        fprintf(stderr, "Error in packet\nReason: %s\n",
-                snmp_errstring(response->errstat));
-      else if (status == STAT_TIMEOUT)
-        fprintf(stderr, "Timeout: No response from %s.\n",
-                session.peername);
-      else
-        snmp_sess_perror("snmpdemoapp", ss);
-
+        netsnmp_pdu *pdu = makepdu(myoid);
+        //Send the Request out.
+        status = snmp_synch_response(ss, pdu, &response);
+        //Process the response.
+        if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) 
+        {
+            //SUCCESS: Print the result variables
+            for(vars = response->variables; vars; vars = vars->next_variable)
+            print_variable(vars->name, vars->name_length, vars);
+        }
+        //clean up
+        if (response)
+            snmp_free_pdu(response);
     }
-*/
-   }
-    /*
-     * Clean up:
-     *  1) free the response.
-     *  2) close the session.
-     */
-    if (response)
-      snmp_free_pdu(response);
-}
+
+    //get ip neighbors loop----------------------------
+    for(i = 0; i < 1; i++)
+    {
+        char myoid[] = "";
+    }
+
+    //MONITORING LOOP!----------------------------------
+    for (i = 0; i < SECONDSTOMONITOR; i++)
+    {
+        //different choices to monitor:
+        char myoid[] = "ifInUcastPkts.3";
+        //char myoid[] = "ifOutUcastPkts.3";
+        //char myoid[] = "ifOutOctets.3";
+        //char myoid[] = "ifInOctets.3";
+
+        //a brand new pdu is required for each get
+        netsnmp_pdu *pdu = makepdu(myoid);
+
+        //Send the Request out.
+        status = snmp_synch_response(ss, pdu, &response);
+
+        //Process the response.
+        if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) 
+        {
+            //SUCCESS: Print the result variables
+            for(vars = response->variables; vars; vars = vars->next_variable)
+            print_variable(vars->name, vars->name_length, vars);
+        }
+
+        //clean up
+        if (response)
+            snmp_free_pdu(response);
+
+        //take 1 second break
+        sleep(1);
+    }
+
     snmp_close(ss);
-
     SOCK_CLEANUP;
     return (0);
-} /* main() */
+}
 
+
+netsnmp_pdu *makepdu(char myoid[])
+{
+    netsnmp_pdu *pdu;
+    pdu = snmp_pdu_create(SNMP_MSG_GET);
+    oid anOID[MAX_OID_LEN];
+    size_t anOID_len;
+    anOID_len = MAX_OID_LEN;
+
+    get_node(myoid, anOID, &anOID_len);
+
+    snmp_add_null_var(pdu, anOID, anOID_len);
+    return pdu;
+
+}
