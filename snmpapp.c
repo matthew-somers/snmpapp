@@ -13,7 +13,6 @@
 
 /*
     TODO:
-    Determine how many interfaces exist in a particular MIB.
     Set up arguments from spec.
     Find ipNeighbors, whatever that means.
     Find a way to refresh monitoring data faster (different oid?).
@@ -64,22 +63,26 @@ int main(int argc, char ** argv)
     }
 
     //get interfaces loop-------------------------------
-    for (icounter = '1'; icounter <= '3'; icounter++)
+    //goes until it finds 9 or fails finding ifDescrs (interfaces)
+    for (icounter = '1'; icounter <= '9'; icounter++)
     {
         char myoid[] = "ifDescr. ";
         myoid[8] = icounter;
-
         netsnmp_pdu *pdu = makepdu(myoid);
-        //Send the Request out.
+
         status = snmp_synch_response(ss, pdu, &response);
-        //Process the response.
         if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) 
         {
-            //SUCCESS: Print the result variables
             for(vars = response->variables; vars; vars = vars->next_variable)
             print_variable(vars->name, vars->name_length, vars);
         }
-        //clean up
+        else
+        {
+            if (response)
+                snmp_free_pdu(response);
+
+            break; //IMPORTANT escape conditions
+        }
         if (response)
             snmp_free_pdu(response);
     }
