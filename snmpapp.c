@@ -5,10 +5,9 @@
 #define SECONDSTOMONITOR 10
 
 /*
- Authors: Matthew Somers and Erik Holden for CS166.
- Line 77 is the most important one here so far.
- Based on the example from:
- http://www.net-snmp.org/wiki/index.php/TUT:Simple_Application
+    Authors: Matthew Somers and Erik Holden for CS166.
+    Based on the example from:
+    http://www.net-snmp.org/wiki/index.php/TUT:Simple_Application
 */
 
 /*
@@ -71,12 +70,13 @@ int main(int argc, char ** argv)
         netsnmp_pdu *pdu = makepdu(myoid);
 
         status = snmp_synch_response(ss, pdu, &response);
-        if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) 
+        if (status == STAT_SUCCESS 
+            && response->errstat == SNMP_ERR_NOERROR) 
         {
             for(vars = response->variables; vars; vars = vars->next_variable)
             print_variable(vars->name, vars->name_length, vars);
         }
-        else
+        else //failed finding next ifDescr
         {
             if (response)
                 snmp_free_pdu(response);
@@ -109,7 +109,8 @@ int main(int argc, char ** argv)
         status = snmp_synch_response(ss, pdu, &response);
 
         //Process the response.
-        if (status == STAT_SUCCESS && response->errstat == SNMP_ERR_NOERROR) 
+        if (status == STAT_SUCCESS 
+            && response->errstat == SNMP_ERR_NOERROR) 
         {
             //SUCCESS: Print the result variables
             for(vars = response->variables; vars; vars = vars->next_variable)
