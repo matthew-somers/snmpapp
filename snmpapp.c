@@ -2,7 +2,6 @@
 #include <net-snmp/net-snmp-includes.h>
 #include <string.h>
 #include <unistd.h>
-#define SECONDSTOMONITOR 10
 
 /*
     Authors: Matthew Somers and Erik Holden for CS166.
@@ -12,18 +11,27 @@
 
 /*
     TODO:
-    Set up arguments from spec.
     Find ipNeighbors, whatever that means.
-    Find a way to refresh monitoring data faster (different oid?).
     Represent monitored data in graph.
     Make tables for interfaces and ipNeighbors.
+    Also get interface ip? ifPhysAddress?
     Analyze accuracy report for extra credit.
+    Restructure whole thing to do monitoring for each interface to better match how spec words it??
 */
 
 netsnmp_pdu *makepdu(char myoid[]);
 
 int main(int argc, char ** argv)
 {
+    //check args
+    if (argc != 4)
+    {
+        printf("\nUsage: %s secondsinterval numsamples ip\n\n", argv[0]);
+        return 1;
+    }
+
+    int secondsinterval = atoi(argv[1]);
+    int numsamples = atoi(argv[2]);
     netsnmp_session session, *ss;
     netsnmp_pdu *response;
     netsnmp_variable_list *vars;
@@ -37,7 +45,7 @@ int main(int argc, char ** argv)
     //Initialize a "session" that defines who we're going to talk to
     snmp_sess_init( &session );
     //set up defaults
-    session.peername = strdup("localhost");
+    session.peername = strdup(argv[3]);
 
     
     //we'll use the insecure (but simplier) SNMPv1
@@ -65,6 +73,7 @@ int main(int argc, char ** argv)
     //goes until it finds 9 or fails finding ifDescrs (interfaces)
     for (icounter = '1'; icounter <= '9'; icounter++)
     {
+        //most comments are in monitoring section
         char myoid[] = "ifDescr. ";
         myoid[8] = icounter;
         netsnmp_pdu *pdu = makepdu(myoid);
@@ -83,6 +92,7 @@ int main(int argc, char ** argv)
 
             break; //IMPORTANT escape conditions
         }
+
         if (response)
             snmp_free_pdu(response);
     }
@@ -94,13 +104,18 @@ int main(int argc, char ** argv)
     }
 
     //MONITORING LOOP!----------------------------------
-    for (i = 0; i < SECONDSTOMONITOR; i++)
+    for (i = 0; i < numsamples; i++)
     {
         //different choices to monitor:
-        char myoid[] = "ifInUcastPkts.3";
+        //char myoid[] = "ifInUcastPkts.3";
         //char myoid[] = "ifOutUcastPkts.3";
         //char myoid[] = "ifOutOctets.3";
+        
+        //one used in class example, octets are BYTES
         //char myoid[] = "ifInOctets.3";
+
+        //other potential good one
+        char myoid[] = "ipInDelivers.0";
 
         //a brand new pdu is required for each get
         netsnmp_pdu *pdu = makepdu(myoid);
@@ -121,8 +136,8 @@ int main(int argc, char ** argv)
         if (response)
             snmp_free_pdu(response);
 
-        //take 1 second break
-        sleep(1);
+        //take a break
+        sleep(secondsinterval);
     }
 
     snmp_close(ss);
