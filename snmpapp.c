@@ -14,12 +14,19 @@
     Find ipNeighbors, whatever that means.
     Represent monitored data in graph.
     Make tables for interfaces and ipNeighbors.
-    Also get interface ip? ifPhysAddress?
     Analyze accuracy report for extra credit.
     Restructure whole thing to do monitoring for each interface to better match how spec words it??
+    Traffic includes upload as well as download, need opposites.
 */
 
-netsnmp_pdu *makepdu(char myoid[]);
+/*
+    IP-MIB::ipAdEntIfIndex.10.0.0.8 = INTEGER: 3
+    IP-MIB::ipAdEntIfIndex.127.0.0.1 = INTEGER: 1
+
+    These seem to be the only way to relate an ip and an interface. It will need some getnexts and annoying char array comparison gymnastics.
+*/
+
+netsnmp_pdu *makepdu(char myoid[], int getornext);
 
 int main(int argc, char ** argv)
 {
@@ -46,7 +53,6 @@ int main(int argc, char ** argv)
     snmp_sess_init( &session );
     //set up defaults
     session.peername = strdup(argv[3]);
-
     
     //we'll use the insecure (but simplier) SNMPv1
     //set the SNMP version number
@@ -76,13 +82,13 @@ int main(int argc, char ** argv)
         //most comments are in monitoring section
         char myoid[] = "ifDescr. ";
         myoid[8] = icounter;
-        netsnmp_pdu *pdu = makepdu(myoid);
+        netsnmp_pdu *pdu = makepdu(myoid, 0); //0 is get
 
         status = snmp_synch_response(ss, pdu, &response);
         if (status == STAT_SUCCESS 
             && response->errstat == SNMP_ERR_NOERROR) 
         {
-            for(vars = response->variables; vars; vars = vars->next_variable)
+            vars = response->variables;
             print_variable(vars->name, vars->name_length, vars);
         }
         else //failed finding next ifDescr
@@ -93,8 +99,32 @@ int main(int argc, char ** argv)
             break; //IMPORTANT escape conditions
         }
 
+        //find an interface's ip-----------------------
+        char ipoid[100];
+        if (icounter == '1')
+            strncpy(ipoid, "ipAdEntIfIndex", sizeof(ipoid));
+        else
+        {
+
+        }
+
+
+        
+        netsnmp_pdu *ippdu = makepdu(ipoid, 1); //getnext is 1
+        status = snmp_synch_response(ss, ippdu, &response);
+        if (status == STAT_SUCCESS 
+            && response->errstat == SNMP_ERR_NOERROR) 
+        {
+            vars = response->variables;
+            print_variable(vars->name, vars->name_length, vars);
+        }
+
+        //strncpy(ipentry, vars->name, sizeof(ipentry));
+        //printf("\n%s\n", ipentry);
         if (response)
+        {
             snmp_free_pdu(response);
+        }
     }
 
     //get ip neighbors loop----------------------------
@@ -112,13 +142,14 @@ int main(int argc, char ** argv)
         //char myoid[] = "ifOutOctets.3";
         
         //one used in class example, octets are BYTES
-        //char myoid[] = "ifInOctets.3";
+        char myoid[] = "ifInOctets.3";
 
         //other potential good one
-        char myoid[] = "ipInDelivers.0";
+        //char myoid[] = "ipInDelivers.0";
+        //char myoid[] = "ipInReceives.0";
 
-        //a brand new pdu is required for each get
-        netsnmp_pdu *pdu = makepdu(myoid);
+        //a brand new pdu is required for each. Get is 0
+        netsnmp_pdu *pdu = makepdu(myoid, 0);
 
         //Send the Request out.
         status = snmp_synch_response(ss, pdu, &response);
@@ -128,7 +159,7 @@ int main(int argc, char ** argv)
             && response->errstat == SNMP_ERR_NOERROR) 
         {
             //SUCCESS: Print the result variables
-            for(vars = response->variables; vars; vars = vars->next_variable)
+            vars = response->variables;
             print_variable(vars->name, vars->name_length, vars);
         }
 
@@ -146,10 +177,15 @@ int main(int argc, char ** argv)
 }
 
 
-netsnmp_pdu *makepdu(char myoid[])
+netsnmp_pdu *makepdu(char myoid[], int getornext)
 {
     netsnmp_pdu *pdu;
-    pdu = snmp_pdu_create(SNMP_MSG_GET);
+
+    if (getornext == 0)
+        pdu = snmp_pdu_create(SNMP_MSG_GET);
+    else
+       pdu = snmp_pdu_create(SNMP_MSG_GETNEXT); 
+
     oid anOID[MAX_OID_LEN];
     size_t anOID_len;
     anOID_len = MAX_OID_LEN;
