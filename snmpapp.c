@@ -11,11 +11,11 @@
 
 /*
     TODO:
-    Find ipNeighbors, whatever that means.
+    Find ipNeighbors, (routers near you)
     Represent monitored data in graph.
     Make tables for interfaces and ipNeighbors.
     Analyze accuracy report for extra credit.
-    Restructure whole thing to do monitoring for each interface to better match how spec words it??
+    Restructure whole thing to do monitoring for each interface to better match how spec words it?? YES, we do need this.
     Traffic includes upload as well as download, need opposites.
 */
 
@@ -75,12 +75,17 @@ int main(int argc, char ** argv)
         exit(1);
     }
 
+    int BUFLEN = 100;
+    size_t *len = 100;
+    u_char *buf[BUFLEN];
+   size_t *outlen = 0;
     //get interfaces loop-------------------------------
     //goes until it finds 9 or fails finding ifDescrs (interfaces)
     for (icounter = '1'; icounter <= '9'; icounter++)
     {
         //most comments are in monitoring section
-        char myoid[] = "ifDescr. ";
+        //char myoid[] = "ifDescr. ";
+        char myoid[] = "ifIndex. ";
         myoid[8] = icounter;
         netsnmp_pdu *pdu = makepdu(myoid, 0); //0 is get
 
@@ -90,7 +95,13 @@ int main(int argc, char ** argv)
         {
             vars = response->variables;
             print_variable(vars->name, vars->name_length, vars);
+
+            //sprint_realloc_integer(buf, len, outlen, 0, vars, NULL, NULL, NULL);
+            
+            printf("\n%li\n", *vars->val.integer);
         }
+        
+
         else //failed finding next ifDescr
         {
             if (response)
@@ -102,7 +113,7 @@ int main(int argc, char ** argv)
         //find an interface's ip-----------------------
         char ipoid[100];
         if (icounter == '1')
-            strncpy(ipoid, "ipAdEntIfIndex", sizeof(ipoid));
+            strncpy(ipoid, "ipAdEntAddr.10.0.0.8", sizeof(ipoid));
         else
         {
 
@@ -117,6 +128,9 @@ int main(int argc, char ** argv)
         {
             vars = response->variables;
             print_variable(vars->name, vars->name_length, vars);
+
+            u_char *ip = vars->val.string;
+            printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
         }
 
         //strncpy(ipentry, vars->name, sizeof(ipentry));
