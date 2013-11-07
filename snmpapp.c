@@ -75,30 +75,103 @@ int main(int argc, char ** argv)
         exit(1);
     }
 
-    int BUFLEN = 100;
-    size_t *len = 100;
-    u_char *buf[BUFLEN];
-   size_t *outlen = 0;
+    int k;
+    char *alladdrs[100][100];
+    char *ipaddition[100];
+    char *ipoid[100];
+    sprintf(ipoid, "ipAdEntAddr.");
+    for (k = 0; k < 2; k++)
+    {
+        netsnmp_pdu *ippdu = makepdu(ipoid, 1); //getnext is 1
+        status = snmp_synch_response(ss, ippdu, &response);
+        if (status == STAT_SUCCESS 
+            && response->errstat == SNMP_ERR_NOERROR) 
+        {
+
+            vars = response->variables;
+            //print_variable(vars->name, vars->name_length, vars);
+
+            u_char *ip = vars->val.string;
+            char iptemp[100];
+            sprintf(ipaddition, "%d", ip[0]);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[1]);
+            strcat(ipaddition, iptemp);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[2]);
+            strcat(ipaddition, iptemp);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[3]);
+            strcat(ipaddition, iptemp);
+            strcat(alladdrs[k], ipaddition);
+
+            //printf("%s\n", alladdrs[k]);
+            sprintf(ipoid, "ipAdEntAddr.");
+            strcat(ipoid, ipaddition);
+        }                  
+    }
+
+    //printf("\n%s\n", alladdrs[1]);
+
     //get interfaces loop-------------------------------
     //goes until it finds 9 or fails finding ifDescrs (interfaces)
     for (icounter = '1'; icounter <= '9'; icounter++)
     {
         //most comments are in monitoring section
-        //char myoid[] = "ifDescr. ";
-        char myoid[] = "ifIndex. ";
-        myoid[8] = icounter;
-        netsnmp_pdu *pdu = makepdu(myoid, 0); //0 is get
+        char myoidname[] = "ifDescr. ";
+        char myoidnum[] = "ifIndex. ";
+        myoidname[8] = icounter;
+        myoidnum[8] = icounter;
+        netsnmp_pdu *pduname = makepdu(myoidname, 0); //0 is get
+        netsnmp_pdu *pdunum = makepdu(myoidnum, 0); //0 is get
 
-        status = snmp_synch_response(ss, pdu, &response);
+        status = snmp_synch_response(ss, pduname, &response);
         if (status == STAT_SUCCESS 
             && response->errstat == SNMP_ERR_NOERROR) 
         {
             vars = response->variables;
-            print_variable(vars->name, vars->name_length, vars);
+            //print_variable(vars->name, vars->name_length, vars);
 
-            //sprint_realloc_integer(buf, len, outlen, 0, vars, NULL, NULL, NULL);
-            
-            printf("\n%li\n", *vars->val.integer);
+            int interface;
+            if (status == STAT_SUCCESS 
+                && response->errstat == SNMP_ERR_NOERROR) 
+            {
+                char *name = vars->val.string;        
+                status = snmp_synch_response(ss, pdunum, &response);
+                vars = response->variables;
+                interface = *vars->val.integer;           
+                int m;
+                char *ipcompareoid[100];
+
+                for (m = 0; m < 2; m++) 
+                { 
+                    
+                    sprintf(ipcompareoid, "ipAddressIfIndex.ipv4.\"");
+                    strcat(ipcompareoid, alladdrs[m]);
+                    strcat(ipcompareoid, "\"");
+                    printf("\n\n%s\n\n", ipcompareoid);
+                    netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, 0); //0 is get
+                    status = snmp_synch_response(ss, pdutocompare, &response);
+                    vars = response->variables;
+                    if (status == STAT_SUCCESS)
+                    {
+                        print_variable(vars->name, vars->name_length, vars);  
+                        //int ivars;
+/*
+                        //ivars = *vars->val.integer;
+                        printf("i: %d, varsi: %d", interface, ivars);
+                        if (interface == ivars)
+                        {
+                            printf("%s\n", alladdrs[m]);
+                            printf("Found match!");
+                            break;
+                        }
+*/
+                    }
+
+                }
+
+            }
         }
         
 
@@ -110,31 +183,6 @@ int main(int argc, char ** argv)
             break; //IMPORTANT escape conditions
         }
 
-        //find an interface's ip-----------------------
-        char ipoid[100];
-        if (icounter == '1')
-            strncpy(ipoid, "ipAdEntAddr.10.0.0.8", sizeof(ipoid));
-        else
-        {
-
-        }
-
-
-        
-        netsnmp_pdu *ippdu = makepdu(ipoid, 1); //getnext is 1
-        status = snmp_synch_response(ss, ippdu, &response);
-        if (status == STAT_SUCCESS 
-            && response->errstat == SNMP_ERR_NOERROR) 
-        {
-            vars = response->variables;
-            print_variable(vars->name, vars->name_length, vars);
-
-            u_char *ip = vars->val.string;
-            printf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-        }
-
-        //strncpy(ipentry, vars->name, sizeof(ipentry));
-        //printf("\n%s\n", ipentry);
         if (response)
         {
             snmp_free_pdu(response);
@@ -210,3 +258,4 @@ netsnmp_pdu *makepdu(char myoid[], int getornext)
     return pdu;
 
 }
+
