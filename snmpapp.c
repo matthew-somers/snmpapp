@@ -146,27 +146,24 @@ int main(int argc, char ** argv)
                 for (m = 0; m < 2; m++) 
                 { 
                     
-                    sprintf(ipcompareoid, "ipAddressIfIndex.ipv4.\"");
+                    sprintf(ipcompareoid, "ipAdEntIfIndex.");
                     strcat(ipcompareoid, alladdrs[m]);
-                    strcat(ipcompareoid, "\"");
-                    printf("\n\n%s\n\n", ipcompareoid);
+                    //printf("\n\n%s\n\n", ipcompareoid);
                     netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, 0); //0 is get
                     status = snmp_synch_response(ss, pdutocompare, &response);
                     vars = response->variables;
                     if (status == STAT_SUCCESS)
                     {
-                        print_variable(vars->name, vars->name_length, vars);  
-                        //int ivars;
-/*
-                        //ivars = *vars->val.integer;
-                        printf("i: %d, varsi: %d", interface, ivars);
+                        //printf("%d", *vars->val.integer);
+                        //print_variable(vars->name, vars->name_length, vars);  
+                        int ivars;
+                        ivars = *vars->val.integer;
+                        //printf("i: %d, varsi: %d", interface, ivars);
                         if (interface == ivars)
                         {
-                            printf("%s\n", alladdrs[m]);
-                            printf("Found match!");
+                            printf("%s is %d at %s\n", name, interface, alladdrs[m]);
                             break;
                         }
-*/
                     }
 
                 }
