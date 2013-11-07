@@ -75,11 +75,14 @@ int main(int argc, char ** argv)
         exit(1);
     }
 
+    
     int k;
     char *alladdrs[100][100];
     char *ipaddition[100];
     char *ipoid[100];
     sprintf(ipoid, "ipAdEntAddr.");
+
+    //grabbing all interface ips loop -------------------------
     for (k = 0; k < 2; k++)
     {
         netsnmp_pdu *ippdu = makepdu(ipoid, 1); //getnext is 1
@@ -111,8 +114,6 @@ int main(int argc, char ** argv)
         }                  
     }
 
-    //printf("\n%s\n", alladdrs[1]);
-
     //get interfaces loop-------------------------------
     //goes until it finds 9 or fails finding ifDescrs (interfaces)
     for (icounter = '1'; icounter <= '9'; icounter++)
@@ -132,6 +133,7 @@ int main(int argc, char ** argv)
             vars = response->variables;
             //print_variable(vars->name, vars->name_length, vars);
 
+            //match up ips with interfaces
             int interface;
             if (status == STAT_SUCCESS 
                 && response->errstat == SNMP_ERR_NOERROR) 
@@ -159,10 +161,27 @@ int main(int argc, char ** argv)
                         int ivars;
                         ivars = *vars->val.integer;
                         //printf("i: %d, varsi: %d", interface, ivars);
-                        if (interface == ivars)
+
+                        //specifically to local loop
+                        if (strcmp(name, "lo") == 0)
+                        {
+                            printf("%s is %d, local loop\n", name, interface);
+                            break;
+                        }
+
+                        else if (interface == ivars)
                         {
                             printf("%s is %d at %s\n", name, interface, alladdrs[m]);
+
                             break;
+                        }
+                        
+
+    
+                        //catches any interface not connected to internet
+                        else if (m = 1)
+                        {
+                            printf("%s is %d with no ip\n", name, interface);
                         }
                     }
 
