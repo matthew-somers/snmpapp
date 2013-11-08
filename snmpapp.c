@@ -25,7 +25,7 @@
 */
 
 netsnmp_pdu *makepdu(char myoid[], int getornext);
-char **findAllAddrs(netsnmp_session *ss, int alladdrs[BUFLEN][BUFLEN]);
+char **findAllAddrs(netsnmp_session *ss, int **alladdrs[BUFLEN][BUFLEN]);
 
 int main(int argc, char ** argv)
 {
@@ -42,7 +42,6 @@ int main(int argc, char ** argv)
     netsnmp_pdu *response;
     netsnmp_variable_list *vars;
     int status;
-    int i;
 
     //Initialize the SNMP library
     init_snmp("snmpapp");
@@ -74,21 +73,24 @@ int main(int argc, char ** argv)
     }
 
     //find all ips--------------------------------------
-    char alladdrs[BUFLEN][BUFLEN];
+    char **alladdrs[BUFLEN][BUFLEN];
     findAllAddrs(ss, alladdrs);
 
+    //holds all of our interface info
     int icounter;
-    char myoidnum[BUFLEN];
-    char myoidname[BUFLEN];
+    int inumholder[BUFLEN];
+    char inameholder[BUFLEN][BUFLEN];
+    char *iipholder[icounter][BUFLEN];
 
     //get interfaces loop-------------------------------
     //goes until it finds 100 or fails finding ifDescrs (interfaces)
-    for (icounter = 1; icounter <= 100; icounter++)
+    for (icounter = 0; icounter < BUFLEN; icounter++)
     {
         //most comments are in monitoring section
-        
-        sprintf(myoidname, "ifDescr.%d", icounter);
-        sprintf(myoidnum, "ifIndex.%d", icounter);
+        char myoidnum[BUFLEN];
+        char myoidname[BUFLEN];
+        sprintf(myoidname, "ifDescr.%d", icounter+1);
+        sprintf(myoidnum, "ifIndex.%d", icounter+1);
 
         netsnmp_pdu *pduname = makepdu(myoidname, GET);
         netsnmp_pdu *pdunum = makepdu(myoidnum, GET);
@@ -97,73 +99,84 @@ int main(int argc, char ** argv)
         if (status == STAT_SUCCESS 
             && response->errstat == SNMP_ERR_NOERROR) 
         {
-            //match up ips with interfaces
+            //save this interface!
             vars = response->variables;
-            char *name = vars->val.string;     
+            sprintf(inameholder[icounter], vars->val.string);
             status = snmp_synch_response(ss, pdunum, &response);
             vars = response->variables;
-            int interface = *vars->val.integer;           
-            int m;
-            char *ipcompareoid[BUFLEN];
-
-            for (m = 0; m < sizeof(alladdrs)/sizeof(alladdrs[0]); m++) 
-            { 
-                //specific to local loop
-                if (strcmp(name, "lo") == 0)
-                { 
-                    printf("%s is %d, local loop\n", name, interface);
-                    break;
-                } 
-
-                sprintf(ipcompareoid, "ipAdEntIfIndex.%s", alladdrs[m]);
-                //printf("\n\n%s\n\n", ipcompareoid);
-                netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, GET);
-                status = snmp_synch_response(ss, pdutocompare, &response);
-                vars = response->variables;
-                if (status == STAT_SUCCESS)
-                {
-                    int ivars = *vars->val.integer;
-                    if (interface == ivars)
-                    {
-                        printf("%s is %d at %s\n", name, interface, alladdrs[m]);
-                        break; 
-                    } 
-                   
-                    //catches any interface not connected to internet
-                    else if (m = (sizeof(alladdrs)/sizeof(alladdrs[0])) - 1)
-                        printf("%s is %d with no ip\n", name, interface);
-                }
-            }
+            inumholder[icounter] = *vars->val.integer;           
         }
 
         else //failed finding next ifDescr
         {
             if (response)
                 snmp_free_pdu(response);
-
             break; //IMPORTANT escape conditions
         }
 
         if (response)
-        {
             snmp_free_pdu(response);
+    }
+
+    //go through interfaces, match up with ips-----------------
+    int m;
+    for (m = 0; m < icounter; m++) 
+    {
+        //specific to local loop
+        if (strcmp(inameholder[m], "lo") == 0)
+        { 
+            strcpy(iipholder[m], "local loop");
+            printf("%s is %d, local loop\n", inameholder[m], inumholder[m]);
+            continue;
+        } 
+
+        int j;
+        //iterate through ips to match up with interfaces
+        for (j = 0; j < icounter; j++)
+        {
+            //catches interfaces without ips
+            if (strcmp(alladdrs[j], "") == 0 && j == (icounter-1))
+            {
+                strcpy(iipholder[m], "");
+                printf("%s is %d with no ip\n", inameholder[m], inumholder[m]);
+                break;
+            }
+
+            char *ipcompareoid[BUFLEN];
+            sprintf(ipcompareoid, "ipAdEntIfIndex.%s", alladdrs[j]);
+            //printf("\n\n%s\n\n", ipcompareoid);
+            netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, GET);
+            status = snmp_synch_response(ss, pdutocompare, &response);
+            vars = response->variables;
+
+            if (status == STAT_SUCCESS)
+            {
+                int ivars = *vars->val.integer;
+                if (inumholder[m] == ivars)
+                {
+                    strcpy(iipholder[m], alladdrs[j]);
+                    printf("%s is %d at %s\n", inameholder[m], inumholder[m], alladdrs[j]);
+                    break; 
+                } 
+            }
         }
     }
 
     //get ip neighbors loop----------------------------
-    for(i = 0; i < 1; i++)
+    for(m = 0; m < 1; m++)
     {
         char myoid[] = "";
     }
 
 
-    //set it to update more often (every 1 second):
+    //set agent to update more often (every 1 second):
     char setoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2");
     netsnmp_pdu *setpdu = makepdu(setoid, SET);
-    status = snmp_synch_response(ss, setpdu, &response);
+    snmp_synch_response(ss, setpdu, &response);
+
 
     //MONITORING LOOP!----------------------------------
-    for (i = 0; i < numsamples; i++)
+    for (m = 0; m < numsamples; m++)
     {
         //oid used in class example, octets are BYTES
         char inoid[] = "ifInOctets.3";
@@ -222,7 +235,7 @@ netsnmp_pdu *makepdu(char myoid[], int getornextorset)
     return pdu;
 }
 
-char **findAllAddrs(netsnmp_session *ss, int alladdrs[BUFLEN][BUFLEN])
+char **findAllAddrs(netsnmp_session *ss, int **alladdrs[BUFLEN][BUFLEN])
 {
     netsnmp_pdu *response;
     netsnmp_variable_list *vars;
