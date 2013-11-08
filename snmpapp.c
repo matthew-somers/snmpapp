@@ -3,6 +3,11 @@
 #include <string.h>
 #include <unistd.h>
 
+#define BUFLEN 100
+#define GET 0
+#define GETNEXT 1
+#define SET 2
+
 /*
     Authors: Matthew Somers and Erik Holden for CS166.
     Based on the example from:
@@ -20,6 +25,7 @@
 */
 
 netsnmp_pdu *makepdu(char myoid[], int getornext);
+char **findAllAddrs(netsnmp_session *ss, int alladdrs[BUFLEN][BUFLEN]);
 
 int main(int argc, char ** argv)
 {
@@ -37,7 +43,6 @@ int main(int argc, char ** argv)
     netsnmp_variable_list *vars;
     int status;
     int i;
-    char icounter;
 
     //Initialize the SNMP library
     init_snmp("snmpapp");
@@ -68,112 +73,68 @@ int main(int argc, char ** argv)
         exit(1);
     }
 
-    
-    int k;
-    char *alladdrs[100][100];
-    char *ipaddition[100];
-    char *ipoid[100];
-    sprintf(ipoid, "ipAdEntAddr.");
+    //find all ips--------------------------------------
+    char alladdrs[BUFLEN][BUFLEN];
+    findAllAddrs(ss, alladdrs);
 
-    //grabbing all interface ips loop -------------------------
-    for (k = 0; k < 2; k++)
-    {
-        netsnmp_pdu *ippdu = makepdu(ipoid, 1); //getnext is 1
-        status = snmp_synch_response(ss, ippdu, &response);
-        if (status == STAT_SUCCESS 
-            && response->errstat == SNMP_ERR_NOERROR) 
-        {
-
-            vars = response->variables;
-            //print_variable(vars->name, vars->name_length, vars);
-
-            u_char *ip = vars->val.string;
-            char iptemp[100];
-            sprintf(ipaddition, "%d", ip[0]);
-            strcat(ipaddition, ".");
-            sprintf(iptemp, "%d", ip[1]);
-            strcat(ipaddition, iptemp);
-            strcat(ipaddition, ".");
-            sprintf(iptemp, "%d", ip[2]);
-            strcat(ipaddition, iptemp);
-            strcat(ipaddition, ".");
-            sprintf(iptemp, "%d", ip[3]);
-            strcat(ipaddition, iptemp);
-            strcat(alladdrs[k], ipaddition);
-
-            //printf("%s\n", alladdrs[k]);
-            sprintf(ipoid, "ipAdEntAddr.");
-            strcat(ipoid, ipaddition);
-        }                  
-    }
+    int icounter;
+    char myoidnum[BUFLEN];
+    char myoidname[BUFLEN];
 
     //get interfaces loop-------------------------------
-    //goes until it finds 9 or fails finding ifDescrs (interfaces)
-    for (icounter = '1'; icounter <= '9'; icounter++)
+    //goes until it finds 100 or fails finding ifDescrs (interfaces)
+    for (icounter = 1; icounter <= 100; icounter++)
     {
         //most comments are in monitoring section
-        char myoidname[] = "ifDescr. ";
-        char myoidnum[] = "ifIndex. ";
-        myoidname[8] = icounter;
-        myoidnum[8] = icounter;
-        netsnmp_pdu *pduname = makepdu(myoidname, 0); //0 is get
-        netsnmp_pdu *pdunum = makepdu(myoidnum, 0); //0 is get
+        
+        sprintf(myoidname, "ifDescr.%d", icounter);
+        sprintf(myoidnum, "ifIndex.%d", icounter);
+
+        netsnmp_pdu *pduname = makepdu(myoidname, GET);
+        netsnmp_pdu *pdunum = makepdu(myoidnum, GET);
 
         status = snmp_synch_response(ss, pduname, &response);
         if (status == STAT_SUCCESS 
             && response->errstat == SNMP_ERR_NOERROR) 
         {
-            vars = response->variables;
-            //print_variable(vars->name, vars->name_length, vars);
-
             //match up ips with interfaces
-            int interface;
-            if (status == STAT_SUCCESS 
-                && response->errstat == SNMP_ERR_NOERROR) 
-            {
-                char *name = vars->val.string;        
-                status = snmp_synch_response(ss, pdunum, &response);
+            vars = response->variables;
+            char *name = vars->val.string;     
+            status = snmp_synch_response(ss, pdunum, &response);
+            vars = response->variables;
+            int interface = *vars->val.integer;           
+            int m;
+            char *ipcompareoid[BUFLEN];
+
+            for (m = 0; m < sizeof(alladdrs)/sizeof(alladdrs[0]); m++) 
+            { 
+                //specific to local loop
+                if (strcmp(name, "lo") == 0)
+                { 
+                    printf("%s is %d, local loop\n", name, interface);
+                    break;
+                } 
+
+                sprintf(ipcompareoid, "ipAdEntIfIndex.%s", alladdrs[m]);
+                //printf("\n\n%s\n\n", ipcompareoid);
+                netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, GET);
+                status = snmp_synch_response(ss, pdutocompare, &response);
                 vars = response->variables;
-                interface = *vars->val.integer;           
-                int m;
-                char *ipcompareoid[100];
-
-                for (m = 0; m < sizeof(alladdrs)/sizeof(alladdrs[0]); m++) 
-                {  
-                    sprintf(ipcompareoid, "ipAdEntIfIndex.");
-                    strcat(ipcompareoid, alladdrs[m]);
-                    //printf("\n\n%s\n\n", ipcompareoid);
-                    netsnmp_pdu *pdutocompare = makepdu(ipcompareoid, 0); //0 is get
-                    status = snmp_synch_response(ss, pdutocompare, &response);
-                    vars = response->variables;
-                    if (status == STAT_SUCCESS)
+                if (status == STAT_SUCCESS)
+                {
+                    int ivars = *vars->val.integer;
+                    if (interface == ivars)
                     {
-                        int ivars;
-                        ivars = *vars->val.integer;
-
-                        //specifically to local loop
-                        if (strcmp(name, "lo") == 0)
-                        { 
-                            printf("%s is %d, local loop\n", name, interface);
-                            break;
-                        }
-
-                        else if (interface == ivars)
-                        { 
-                            printf("%s is %d at %s\n", name, interface, alladdrs[m]);
-                            break; 
-                        } 
-                       
-                        //catches any interface not connected to internet
-                        else if (m = sizeof(alladdrs)/sizeof(alladdrs[0]))
-                            printf("%s is %d with no ip\n", name, interface);
+                        printf("%s is %d at %s\n", name, interface, alladdrs[m]);
+                        break; 
                     } 
-
+                   
+                    //catches any interface not connected to internet
+                    else if (m = (sizeof(alladdrs)/sizeof(alladdrs[0])) - 1)
+                        printf("%s is %d with no ip\n", name, interface);
                 }
-
             }
         }
-        
 
         else //failed finding next ifDescr
         {
@@ -195,41 +156,21 @@ int main(int argc, char ** argv)
         char myoid[] = "";
     }
 
-/*
-    //set it to update more often:
-    char setoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2"); //set to 1 second
-    netsnmp_pdu *setpdu = makepdu(setoid, 2); //2 is set
+
+    //set it to update more often (every 1 second):
+    char setoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2");
+    netsnmp_pdu *setpdu = makepdu(setoid, SET);
     status = snmp_synch_response(ss, setpdu, &response);
-    if (status == STAT_SUCCESS )
-        printf("\nIt worked??");
-    else
-        printf("\nFailed\n");
-*/
-    char checksetoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2");
-    netsnmp_pdu *checksetpdu = makepdu(checksetoid, 0);
-    status = snmp_synch_response(ss, checksetpdu, &response);
-    vars = response->variables;
-    //int ichecksetoid = *vars->val.integer;
-    printf("\n%li\n", *vars->val.integer);
-    //print_variable(vars->name, vars->name_length, vars);
 
     //MONITORING LOOP!----------------------------------
     for (i = 0; i < numsamples; i++)
     {
-        //different choices to monitor:
-        //char myoid[] = "ifInUcastPkts.3";
-        //char myoid[] = "ifOutUcastPkts.3";
-        //char myoid[] = "ifOutOctets.3";
-        
-        //one used in class example, octets are BYTES
-        char myoid[] = "ifInOctets.3";
+        //oid used in class example, octets are BYTES
+        char inoid[] = "ifInOctets.3";
+        char outoid[] = "ifOutOctets.3";
 
-        //other potential good one
-        //char myoid[] = "ipInDelivers.0";
-        //char myoid[] = "ipInReceives.0";
-
-        //a brand new pdu is required for each. Get is 0
-        netsnmp_pdu *pdu = makepdu(myoid, 0);
+        //a brand new pdu is required for each.
+        netsnmp_pdu *pdu = makepdu(inoid, GET);
 
         //Send the Request out.
         status = snmp_synch_response(ss, pdu, &response);
@@ -260,27 +201,63 @@ int main(int argc, char ** argv)
 netsnmp_pdu *makepdu(char myoid[], int getornextorset)
 {
     netsnmp_pdu *pdu;
-
-    if (getornextorset == 0)
-        pdu = snmp_pdu_create(SNMP_MSG_GET);
-    else if (getornextorset == 1)
-       pdu = snmp_pdu_create(SNMP_MSG_GETNEXT); 
-    else //set is 2
-       pdu = snmp_pdu_create(SNMP_MSG_SET); 
-
     oid anOID[MAX_OID_LEN];
     size_t anOID_len;
     anOID_len = MAX_OID_LEN;
     get_node(myoid, anOID, &anOID_len);
 
-    if (getornextorset == 2)
+    if (getornextorset == GET)
+        pdu = snmp_pdu_create(SNMP_MSG_GET);
+    else if (getornextorset == GETNEXT)
+       pdu = snmp_pdu_create(SNMP_MSG_GETNEXT); 
+    else //set
     {
-        char *ivalues = "1"; //update every 1 second
-        snmp_add_var(pdu, anOID, anOID_len, 'i', ivalues);
+       pdu = snmp_pdu_create(SNMP_MSG_SET); 
+       char *ivalues = "1"; //update every 1 second
+       snmp_add_var(pdu, anOID, anOID_len, 'i', ivalues);
     }
-    else
+
+    if (getornextorset == GET || getornextorset == GETNEXT)    
         snmp_add_null_var(pdu, anOID, anOID_len);
     return pdu;
+}
 
+char **findAllAddrs(netsnmp_session *ss, int alladdrs[BUFLEN][BUFLEN])
+{
+    netsnmp_pdu *response;
+    netsnmp_variable_list *vars;
+    int status;
+    int k;
+    char *ipaddition[BUFLEN];
+    char *ipoid[BUFLEN];
+    sprintf(ipoid, "ipAdEntAddr.");
+
+    //grabbing all interface ips loop -------------------------
+    for (k = 0; k < 2; k++)
+    {
+        netsnmp_pdu *ippdu = makepdu(ipoid, GETNEXT);
+        status = snmp_synch_response(ss, ippdu, &response);
+        if (status == STAT_SUCCESS 
+            && response->errstat == SNMP_ERR_NOERROR) 
+        {
+            vars = response->variables;
+            u_char *ip = vars->val.string;
+            char iptemp[BUFLEN];
+            sprintf(ipaddition, "%d", ip[0]);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[1]);
+            strcat(ipaddition, iptemp);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[2]);
+            strcat(ipaddition, iptemp);
+            strcat(ipaddition, ".");
+            sprintf(iptemp, "%d", ip[3]);
+            strcat(ipaddition, iptemp);
+            strcat(alladdrs[k], ipaddition);
+            //printf("%s\n", alladdrs[k]);
+            sprintf(ipoid, "ipAdEntAddr.%s", ipaddition);
+        }                  
+    }
+    return alladdrs;
 }
 
