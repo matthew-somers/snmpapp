@@ -19,13 +19,6 @@
     Traffic includes upload as well as download, need opposites.
 */
 
-/*
-    IP-MIB::ipAdEntIfIndex.10.0.0.8 = INTEGER: 3
-    IP-MIB::ipAdEntIfIndex.127.0.0.1 = INTEGER: 1
-
-    These seem to be the only way to relate an ip and an interface. It will need some getnexts and annoying char array comparison gymnastics.
-*/
-
 netsnmp_pdu *makepdu(char myoid[], int getornext);
 
 int main(int argc, char ** argv)
@@ -145,9 +138,8 @@ int main(int argc, char ** argv)
                 int m;
                 char *ipcompareoid[100];
 
-                for (m = 0; m < 2; m++) 
-                { 
-                    
+                for (m = 0; m < sizeof(alladdrs)/sizeof(alladdrs[0]); m++) 
+                {  
                     sprintf(ipcompareoid, "ipAdEntIfIndex.");
                     strcat(ipcompareoid, alladdrs[m]);
                     //printf("\n\n%s\n\n", ipcompareoid);
@@ -156,34 +148,26 @@ int main(int argc, char ** argv)
                     vars = response->variables;
                     if (status == STAT_SUCCESS)
                     {
-                        //printf("%d", *vars->val.integer);
-                        //print_variable(vars->name, vars->name_length, vars);  
                         int ivars;
                         ivars = *vars->val.integer;
-                        //printf("i: %d, varsi: %d", interface, ivars);
 
                         //specifically to local loop
                         if (strcmp(name, "lo") == 0)
-                        {
+                        { 
                             printf("%s is %d, local loop\n", name, interface);
                             break;
                         }
 
                         else if (interface == ivars)
-                        {
+                        { 
                             printf("%s is %d at %s\n", name, interface, alladdrs[m]);
-
-                            break;
-                        }
-                        
-
-    
+                            break; 
+                        } 
+                       
                         //catches any interface not connected to internet
-                        else if (m = 1)
-                        {
+                        else if (m = sizeof(alladdrs)/sizeof(alladdrs[0]))
                             printf("%s is %d with no ip\n", name, interface);
-                        }
-                    }
+                    } 
 
                 }
 
@@ -210,6 +194,24 @@ int main(int argc, char ** argv)
     {
         char myoid[] = "";
     }
+
+/*
+    //set it to update more often:
+    char setoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2"); //set to 1 second
+    netsnmp_pdu *setpdu = makepdu(setoid, 2); //2 is set
+    status = snmp_synch_response(ss, setpdu, &response);
+    if (status == STAT_SUCCESS )
+        printf("\nIt worked??");
+    else
+        printf("\nFailed\n");
+*/
+    char checksetoid[] = ("nsCacheTimeout.1.3.6.1.2.1.2.2");
+    netsnmp_pdu *checksetpdu = makepdu(checksetoid, 0);
+    status = snmp_synch_response(ss, checksetpdu, &response);
+    vars = response->variables;
+    //int ichecksetoid = *vars->val.integer;
+    printf("\n%li\n", *vars->val.integer);
+    //print_variable(vars->name, vars->name_length, vars);
 
     //MONITORING LOOP!----------------------------------
     for (i = 0; i < numsamples; i++)
@@ -255,22 +257,29 @@ int main(int argc, char ** argv)
 }
 
 
-netsnmp_pdu *makepdu(char myoid[], int getornext)
+netsnmp_pdu *makepdu(char myoid[], int getornextorset)
 {
     netsnmp_pdu *pdu;
 
-    if (getornext == 0)
+    if (getornextorset == 0)
         pdu = snmp_pdu_create(SNMP_MSG_GET);
-    else
+    else if (getornextorset == 1)
        pdu = snmp_pdu_create(SNMP_MSG_GETNEXT); 
+    else //set is 2
+       pdu = snmp_pdu_create(SNMP_MSG_SET); 
 
     oid anOID[MAX_OID_LEN];
     size_t anOID_len;
     anOID_len = MAX_OID_LEN;
-
     get_node(myoid, anOID, &anOID_len);
 
-    snmp_add_null_var(pdu, anOID, anOID_len);
+    if (getornextorset == 2)
+    {
+        char *ivalues = "1"; //update every 1 second
+        snmp_add_var(pdu, anOID, anOID_len, 'i', ivalues);
+    }
+    else
+        snmp_add_null_var(pdu, anOID, anOID_len);
     return pdu;
 
 }
