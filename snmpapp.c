@@ -25,7 +25,10 @@
 */
 
 netsnmp_pdu *makepdu(char myoid[], int getornext);
-char **findAllAddrs(netsnmp_session *ss, int **alladdrs[BUFLEN][BUFLEN], int icounter);
+char **findAllAddrs(netsnmp_session *ss, 
+    int **alladdrs[BUFLEN][BUFLEN], int icounter);
+void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterval);
+char *makegraphstring(char **graph[BUFLEN][BUFLEN], int latestspeed);
 
 int main(int argc, char ** argv)
 {
@@ -182,14 +185,66 @@ int main(int argc, char ** argv)
 
 
     //MONITORING LOOP!----------------------------------
-    for (m = 0; m < numsamples; m++)
+    for (m = 0; m < icounter; m++)
     {
-        //oid used in class example, octets are BYTES
-        char inoid[] = "ifInOctets.3";
-        char outoid[] = "ifOutOctets.3";
+        char inoid[BUFLEN];
+        char outoid[BUFLEN];
+        sprintf(inoid, "ifInOctets.%d", inumholder[m]);
+        sprintf(outoid, "ifOutOctets.%d", inumholder[m]);
 
+        printf("\n\n%s's bytes in:\n", inameholder[m]);
+        monitor(ss, inoid, numsamples, secondsinterval);
+        printf("\n\n%s's bytes out:\n", inameholder[m]);
+        monitor(ss, outoid, numsamples, secondsinterval);
+        printf("\n\n");
+    }
+
+    snmp_close(ss);
+    SOCK_CLEANUP;
+    return (0);
+}
+
+void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterval)
+{
+    int m;
+    netsnmp_pdu *response;
+    netsnmp_variable_list *vars;
+    int status;
+    int last;
+    int current;
+    char **graph[BUFLEN][BUFLEN];
+    int i;
+    int j;
+
+    //build graph
+    for (i = 0; i < BUFLEN; i++)
+        for (j = 0; j < BUFLEN; j++)
+            graph[i][j] = '\0';
+
+    sprintf(graph[0], "\n4|");
+    sprintf(graph[1], "\n3|");
+    sprintf(graph[2], "\n2|");
+    sprintf(graph[3], "\n1|");
+    sprintf(graph[4], "\n0|");
+    sprintf(graph[5], "\n---------------------------------");
+
+    //build bottom row of graph
+    sprintf(graph[6], "\n 0");
+    for (i = 0; i < numsamples; i++)
+    {
+        strcat(graph[6], "  ");
+        int multiple = secondsinterval*(i+1);
+        char *smultiple[BUFLEN];
+        sprintf(smultiple, "%d", multiple);
+        //printf("\n%s\n", smultiple);
+        strcat(graph[6], smultiple);
+    }
+
+    //actually monitor
+    for (m = 0; m <= numsamples; m++)
+    {
         //a brand new pdu is required for each.
-        netsnmp_pdu *pdu = makepdu(inoid, GET);
+        netsnmp_pdu *pdu = makepdu(oid, GET);
 
         //Send the Request out.
         status = snmp_synch_response(ss, pdu, &response);
@@ -198,9 +253,23 @@ int main(int argc, char ** argv)
         if (status == STAT_SUCCESS 
             && response->errstat == SNMP_ERR_NOERROR) 
         {
-            //SUCCESS: Print the result variables
             vars = response->variables;
-            print_variable(vars->name, vars->name_length, vars);
+
+            //need 2 points to do graph, skip first
+            if (m == 0)
+                last = *vars->val.integer;
+            else
+            {
+                current = *vars->val.integer;
+                int speed = (current-last);
+                //printf("%d bytes\n", speed);
+                last = current;
+
+                printf("\r%s", makegraphstring(graph, speed));
+                fflush(stdout);
+                if (m != numsamples)
+                    printf("\033[7A"); //move console cursor up 7 lines
+            }
         }
 
         //clean up
@@ -210,12 +279,70 @@ int main(int argc, char ** argv)
         //take a break
         sleep(secondsinterval);
     }
-
-    snmp_close(ss);
-    SOCK_CLEANUP;
-    return (0);
 }
 
+char *makegraphstring(char **graph[BUFLEN][BUFLEN], int latestspeed)
+{
+    char *graphstring[BUFLEN*BUFLEN];
+    sprintf(graphstring, "");
+
+    //modify graph with new data
+    if (latestspeed > 400)
+    {
+        strcat(graph[0], "  *");
+        strcat(graph[1], "  *");
+        strcat(graph[2], "  *");
+        strcat(graph[3], "  *");
+        strcat(graph[4], "  *");
+    }
+    else if (latestspeed > 300)
+    {
+        strcat(graph[0], "   ");
+        strcat(graph[1], "  *");
+        strcat(graph[2], "  *");
+        strcat(graph[3], "  *");
+        strcat(graph[4], "  *");
+    }
+    else if (latestspeed > 300)
+    {
+        strcat(graph[0], "   ");
+        strcat(graph[1], "   ");
+        strcat(graph[2], "  *");
+        strcat(graph[3], "  *");
+        strcat(graph[4], "  *");
+    }
+    else if (latestspeed > 300)
+    {
+        strcat(graph[0], "   ");
+        strcat(graph[1], "   ");
+        strcat(graph[2], "   ");
+        strcat(graph[3], "  *");
+        strcat(graph[4], "  *");
+    }
+    else if (latestspeed > 0)
+    {
+        strcat(graph[0], "   ");
+        strcat(graph[1], "   ");
+        strcat(graph[2], "   ");
+        strcat(graph[3], "   ");
+        strcat(graph[4], "  *");
+    }
+    else //no speed
+    {
+        strcat(graph[0], "   ");
+        strcat(graph[1], "   ");
+        strcat(graph[2], "   ");
+        strcat(graph[3], "   ");
+        strcat(graph[4], "   ");
+    }
+
+    //build string to print
+    int i;
+    for (i = 0; i < BUFLEN; i++)
+        strcat(graphstring, graph[i]);
+
+    return graphstring;
+}
 
 netsnmp_pdu *makepdu(char myoid[], int getornextorset)
 {
@@ -241,7 +368,8 @@ netsnmp_pdu *makepdu(char myoid[], int getornextorset)
     return pdu;
 }
 
-char **findAllAddrs(netsnmp_session *ss, int **alladdrs[BUFLEN][BUFLEN], int icounter)
+char **findAllAddrs(netsnmp_session *ss, 
+    int **alladdrs[BUFLEN][BUFLEN], int icounter)
 {
     netsnmp_pdu *response;
     netsnmp_variable_list *vars;
