@@ -172,10 +172,97 @@ int main(int argc, char ** argv)
     }
 
     //get ip neighbors loop----------------------------
-    for(m = 0; m < 1; m++)
+    
+    printf("\n---neighbors---\ninterface \tip address\n");
+    for(m = 1; m <= icounter; m++)
     {
-        char myoid[] = "";
+        char neighborOID[BUFLEN];
+        sprintf(neighborOID, "ipNetToMediaIfIndex.%d", m);
+        
+        //initialize pdus
+        netsnmp_pdu *neighbor_pdu;
+        neighbor_pdu = makepdu(neighborOID, GETNEXT);
+        netsnmp_pdu *neighbor_response;
+
+        //get response and status
+        int neighbor_status = snmp_synch_response(ss, neighbor_pdu, &neighbor_response);
+        
+        if (neighbor_status == STAT_SUCCESS 
+            && neighbor_response->errstat == SNMP_ERR_NOERROR) 
+        {
+            netsnmp_variable_list *neighbor_vars;
+  
+            neighbor_vars = neighbor_response->variables;
+            //interface index
+            int ifInd = *neighbor_vars->val.integer;
+
+            //if the interface index is the current counter
+            if(m == ifInd)
+            {
+                char neighborIPOID_orig[BUFLEN];
+                char neighborIPOID[BUFLEN];
+                sprintf(neighborIPOID_orig, "ipNetToMediaNetAddress.%d", m);
+                sprintf(neighborIPOID, "ipNetToMediaNetAddress.%d", m);
+
+                while(1)//loops until there are no new ip addresses
+                {
+                    //initialize pdus
+                    neighbor_pdu = makepdu(neighborIPOID, GETNEXT);
+
+                    //get response and status
+                    neighbor_status = snmp_synch_response(ss, neighbor_pdu, &neighbor_response);
+
+                    if (neighbor_status == STAT_SUCCESS 
+            && neighbor_response->errstat == SNMP_ERR_NOERROR) 
+                    {
+                        
+                        //Looks for an ip address on the interface
+                        neighbor_vars = neighbor_response->variables;
+                        size_t netAddrLen = MAX_OID_LEN;
+                        oid netAddrOID[MAX_OID_LEN];
+                        char *oidstring = "ipNetToMediaNetAddress";
+                        snmp_parse_oid(oidstring, netAddrOID, &netAddrLen);
+                        int strcmplen = 10;//1.3.6.1.2.1.4.22.1
+
+                        //checks if the oid type is an ip address
+                        if(snmp_oid_compare(netAddrOID, strcmplen, neighbor_vars->name, strcmplen) == 0)
+                        {
+                            //print_variable(neighbor_vars->name, neighbor_vars->name_length, neighbor_vars);
+                            //construct ip address into string
+                            u_char *addr = neighbor_vars->val.string;
+                            char ipaddr[BUFLEN];
+                            char iptemp[BUFLEN];
+                            sprintf(ipaddr, "%d", addr[0]);
+                            strcat(ipaddr, ".");
+                            sprintf(iptemp, "%d", addr[1]);
+                            strcat(ipaddr, iptemp);
+                            strcat(ipaddr, ".");
+                            sprintf(iptemp, "%d", addr[2]);
+                            strcat(ipaddr, iptemp);
+                            strcat(ipaddr, ".");
+                            sprintf(iptemp, "%d", addr[3]);
+                            strcat(ipaddr, iptemp);
+                            printf("%d\t\t%s\n", m, ipaddr);
+
+                            //construct next oid by concatenating ip address
+                            char nextOID[BUFLEN];
+                            sprintf(nextOID, "%s.", neighborIPOID_orig);
+                            strcat(nextOID, ipaddr);
+                            sprintf(neighborIPOID, nextOID);
+                        }
+                        else//if it does not find an ip address then stop searching (move to next interface)
+                            break;
+                    }
+                }
+            }
+        }
+        else//no more interfaces; break loop
+        {
+            break;
+        }
+
     }
+        printf("---neighbors---\n\n");
 
 
     //set agent to update more often (every 1 second):
@@ -407,4 +494,5 @@ char **findAllAddrs(netsnmp_session *ss,
     }
     return alladdrs;
 }
+
 
