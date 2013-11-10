@@ -23,7 +23,7 @@ netsnmp_pdu *makepdu(char myoid[], int getornext);
 char **findAllAddrs(netsnmp_session *ss, 
     int **alladdrs[BUFLEN][BUFLEN], int icounter);
 void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterval);
-char *makegraphstring(char **graph[BUFLEN][BUFLEN], int latestspeed, int time);
+char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time);
 
 int main(int argc, char ** argv)
 {
@@ -297,9 +297,9 @@ int main(int argc, char ** argv)
         sprintf(inoid, "ifInOctets.%d", inumholder[m]);
         sprintf(outoid, "ifOutOctets.%d", inumholder[m]);
 
-        printf("\n\n%s's bytes in:\n", inameholder[m]);
+        printf("\n\n%s's kilobits in per second:\n", inameholder[m]);
         monitor(ss, inoid, numsamples, secondsinterval);
-        printf("\n\n%s's bytes out:\n", inameholder[m]);
+        printf("\n\n%s's kilobits out per second:\n", inameholder[m]);
         monitor(ss, outoid, numsamples, secondsinterval);
         printf("\n\n");
     }
@@ -326,32 +326,34 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
         for (j = 0; j < BUFLEN; j++)
             graph[i][j] = '\0';
 
-    sprintf(graph[0], "\n4|");
-    sprintf(graph[1], "\n3|");
-    sprintf(graph[2], "\n2|");
-    sprintf(graph[3], "\n1|");
-    sprintf(graph[4], "\n0|");
-    sprintf(graph[5], "\n--");
+    //sprintf(graph[0], "\n2240|");
+    sprintf(graph[0], "\n1920|");
+    sprintf(graph[1], "\n1600|");
+    sprintf(graph[2], "\n1280|");
+    sprintf(graph[3], "\n 960|");
+    sprintf(graph[4], "\n 640|");
+    sprintf(graph[5], "\n 320|");
+    sprintf(graph[6], "\n   0|");
+    sprintf(graph[7], "\n    |");
 
     //build bottom row of graph
-    sprintf(graph[6], "\n 0");
+    sprintf(graph[8], "\n    0");
     for (i = 0; i < numsamples; i++)
     {
+        if (i == numsamples-1)
+            strcat(graph[7], "-");
+        strcat(graph[7], "---");
         if (i >= 10)
-        {
-            strcat(graph[5], "-");
-            if (i == numsamples-1)
-                strcat(graph[5], "-");
-        }
-        strcat(graph[5], "---");
-        strcat(graph[6], "  ");
+            strcat(graph[8], " ");
+        else
+            strcat(graph[8], "  ");
         int multiple = secondsinterval*(i+1);
         char *smultiple[BUFLEN];
         sprintf(smultiple, "%d", multiple);
-        //printf("\n%s\n", smultiple);
-        strcat(graph[6], smultiple);
+        strcat(graph[8], smultiple);
     }
-    strcat(graph[6], " (seconds)");
+    strcat(graph[8], " (seconds)");
+
     //actually monitor
     for (m = 0; m <= numsamples; m++)
     {
@@ -371,19 +373,23 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
             if (m == 0)
             {
                 last = *vars->val.integer;
-                printf("\r%s", makegraphstring(graph, NULL, m));
+                printf("\r%s", makegraphstring(graph, 0.0, m));
             }
             else
             {
                 current = *vars->val.integer;
-                int speed = (current-last);
+                float speed = (current-last);
                 last = current;
+                speed *= 8.0;
+                speed /= 1000.0;
+                speed /= secondsinterval;
+                //printf("dec speed: %d, float speed: %f\n", (current-last), speed);
                 printf("\r%s", makegraphstring(graph, speed, m));   
             }
 
             fflush(stdout);
             if (m != numsamples)
-                printf("\033[7A"); //move console cursor up 7 lines
+                printf("\033[9A"); //move console cursor up 9 lines
         }
 
         //clean up
@@ -395,53 +401,73 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
     }
 }
 
-char *makegraphstring(char **graph[BUFLEN][BUFLEN], int latestspeed, int time)
+char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
 {
     char *graphstring[BUFLEN*BUFLEN];
     sprintf(graphstring, "");
 
     //modify graph with new data
-    if (latestspeed != NULL)
+    if (time != 0)
     {
-        if (time >= 10)
-        {
-            strcat(graph[0], " ");
-            strcat(graph[1], " ");
-            strcat(graph[2], " ");
-            strcat(graph[3], " ");
-            strcat(graph[4], " ");
-        }
-        if (latestspeed > 400)
+        if (latestspeed >= 1920)
         {
             strcat(graph[0], "  *");
             strcat(graph[1], "  *");
             strcat(graph[2], "  *");
             strcat(graph[3], "  *");
             strcat(graph[4], "  *");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
         }
-        else if (latestspeed > 300)
+        else if (latestspeed >= 1600)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "  *");
             strcat(graph[2], "  *");
             strcat(graph[3], "  *");
             strcat(graph[4], "  *");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
         }
-        else if (latestspeed > 300)
+        else if (latestspeed >= 1280)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
             strcat(graph[2], "  *");
             strcat(graph[3], "  *");
             strcat(graph[4], "  *");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
         }
-        else if (latestspeed > 300)
+        else if (latestspeed >= 960)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
             strcat(graph[2], "   ");
             strcat(graph[3], "  *");
             strcat(graph[4], "  *");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
+        }
+        else if (latestspeed >= 640)
+        {
+            strcat(graph[0], "   ");
+            strcat(graph[1], "   ");
+            strcat(graph[2], "   ");
+            strcat(graph[3], "   ");
+            strcat(graph[4], "  *");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
+        }
+        else if (latestspeed >= 320)
+        {
+            strcat(graph[0], "   ");
+            strcat(graph[1], "   ");
+            strcat(graph[2], "   ");
+            strcat(graph[3], "   ");
+            strcat(graph[4], "   ");
+            strcat(graph[5], "  *");
+            strcat(graph[6], "  *");
         }
         else if (latestspeed > 0)
         {
@@ -449,15 +475,19 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], int latestspeed, int time)
             strcat(graph[1], "   ");
             strcat(graph[2], "   ");
             strcat(graph[3], "   ");
-            strcat(graph[4], "  *");
+            strcat(graph[4], "   ");
+            strcat(graph[5], "   ");
+            strcat(graph[6], "  *");
         }
-        else //no speed
+        else //speed is 0
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
             strcat(graph[2], "   ");
             strcat(graph[3], "   ");
             strcat(graph[4], "   ");
+            strcat(graph[5], "   ");
+            strcat(graph[6], "   ");
         }
     }
 
