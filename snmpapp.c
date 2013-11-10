@@ -16,7 +16,6 @@
 
 /*
     TODO:
-    Make tables for interfaces and ipNeighbors.
     Analyze accuracy report for extra credit.
 */
 
@@ -133,13 +132,18 @@ int main(int argc, char ** argv)
 
     //go through interfaces, match up with ips-----------------
     int m;
+
+    //print top of table
+    printf("\nINTERFACES\n-------------------------------------------------\n|     index\t|      name\t|   ip address\t|\n");
+    printf("|-----------------------------------------------|\n");
+
     for (m = 0; m < icounter; m++) 
     {
         //specific to local loop
         if (strcmp(inameholder[m], "lo") == 0)
         { 
             strcpy(iipholder[m], "local loop");
-            printf("%s is %d, local loop\n", inameholder[m], inumholder[m]);
+            printf("|        %d\t|       %s\t|  local loop\t|\n", inumholder[m], inameholder[m]);
             continue;
         } 
 
@@ -161,7 +165,7 @@ int main(int argc, char ** argv)
                 if (inumholder[m] == ivars)
                 {
                     strcpy(iipholder[m], alladdrs[j]);
-                    printf("%s is %d at %s\n", inameholder[m], inumholder[m], alladdrs[j]);
+                    printf("|        %d\t|       %s\t|  %s\t|\n", inumholder[m], inameholder[m], alladdrs[j]);
                     break; 
                 } 
             }
@@ -173,16 +177,20 @@ int main(int argc, char ** argv)
                 if (j == (icounter-1))
                 {
                     strcpy(iipholder[m], "");
-                    printf("%s is %d with no ip\n", inameholder[m], inumholder[m]);
+                    printf("|        %d\t|       %s\t|     no ip\t|\n", inumholder[m], inameholder[m]);
                     break;
                 }
             }
         }
     }
 
+    printf("-------------------------------------------------\n\n");
+
     //get ip neighbors loop----------------------------
     
-    printf("\n---neighbors---\ninterface \tip address\n");
+    printf("\nNEIGBORS:\n---------------------------------\n|   interface \t|   ip address\t|\n");
+    printf("|-------------------------------|\n");
+
     for(m = 1; m <= icounter; m++)
     {
         char neighborOID[BUFLEN];
@@ -251,7 +259,8 @@ int main(int argc, char ** argv)
                             strcat(ipaddr, ".");
                             sprintf(iptemp, "%d", addr[3]);
                             strcat(ipaddr, iptemp);
-                            printf("%d\t\t%s\n", m, ipaddr);
+
+                            printf("|       %d\t| %s\t|\n", m, ipaddr);
 
                             //construct next oid by concatenating ip address
                             char nextOID[BUFLEN];
@@ -271,7 +280,7 @@ int main(int argc, char ** argv)
         }
 
     }
-        printf("---neighbors---\n\n");
+        printf("---------------------------------\n\n");
 
 
     //set agent to update more often (every 1 second):
