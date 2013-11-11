@@ -9,6 +9,7 @@
 #define SET 2
 
 /*
+    Monitoring application using Net-SNMP.
     Authors: Matthew Somers and Erik Holden for CS166.
     Based on the example from:
     http://www.net-snmp.org/wiki/index.php/TUT:Simple_Application
