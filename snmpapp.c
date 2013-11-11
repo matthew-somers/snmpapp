@@ -14,11 +14,6 @@
     http://www.net-snmp.org/wiki/index.php/TUT:Simple_Application
 */
 
-/*
-    TODO:
-    Analyze accuracy report for extra credit.
-*/
-
 netsnmp_pdu *makepdu(char myoid[], int getornext);
 char **findAllAddrs(netsnmp_session *ss, 
     int **alladdrs[BUFLEN][BUFLEN], int icounter);
@@ -134,7 +129,7 @@ int main(int argc, char ** argv)
     int m;
 
     //print top of table
-    printf("\nINTERFACES\n-------------------------------------------------\n|     index\t|      name\t|   ip address\t|\n");
+    printf("\nINTERFACES:\n-------------------------------------------------\n|     index\t|      name\t|   ip address\t|\n");
     printf("|-----------------------------------------------|\n");
 
     for (m = 0; m < icounter; m++) 
@@ -188,7 +183,7 @@ int main(int argc, char ** argv)
 
     //get ip neighbors loop----------------------------
     
-    printf("\nNEIGBORS:\n---------------------------------\n|   interface \t|   ip address\t|\n");
+    printf("\nNEIGHBORS:\n---------------------------------\n|   interface \t|   ip address\t|\n");
     printf("|-------------------------------|\n");
 
     for(m = 1; m <= icounter; m++)
@@ -297,9 +292,9 @@ int main(int argc, char ** argv)
         sprintf(inoid, "ifInOctets.%d", inumholder[m]);
         sprintf(outoid, "ifOutOctets.%d", inumholder[m]);
 
-        printf("\n\n%s's kilobits in per second:\n", inameholder[m]);
+        printf("\n\n%s's kilobits in per second: (* indicates speed greater than that num)\n", inameholder[m]);
         monitor(ss, inoid, numsamples, secondsinterval);
-        printf("\n\n%s's kilobits out per second:\n", inameholder[m]);
+        printf("\n\n%s's kilobits out per second: (* indicates speed greater than that num)\n", inameholder[m]);
         monitor(ss, outoid, numsamples, secondsinterval);
         printf("\n\n");
     }
@@ -380,10 +375,12 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
                 current = *vars->val.integer;
                 float speed = (current-last);
                 last = current;
+                //debug accuracy analysis:
+                //speed /= 1000.0;
+                //printf("\nKB/s: %f\n", speed); 
                 speed *= 8.0;
                 speed /= 1000.0;
                 speed /= secondsinterval;
-                //printf("dec speed: %d, float speed: %f\n", (current-last), speed);
                 printf("\r%s", makegraphstring(graph, speed, m));   
             }
 
@@ -401,6 +398,7 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
     }
 }
 
+//adds to graph based on new data
 char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
 {
     char *graphstring[BUFLEN*BUFLEN];
@@ -409,7 +407,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
     //modify graph with new data
     if (time != 0)
     {
-        if (latestspeed >= 1920)
+        if (latestspeed > 1920)
         {
             strcat(graph[0], "  *");
             strcat(graph[1], "  *");
@@ -419,7 +417,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
             strcat(graph[5], "  *");
             strcat(graph[6], "  *");
         }
-        else if (latestspeed >= 1600)
+        else if (latestspeed > 1600)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "  *");
@@ -429,7 +427,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
             strcat(graph[5], "  *");
             strcat(graph[6], "  *");
         }
-        else if (latestspeed >= 1280)
+        else if (latestspeed > 1280)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
@@ -439,7 +437,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
             strcat(graph[5], "  *");
             strcat(graph[6], "  *");
         }
-        else if (latestspeed >= 960)
+        else if (latestspeed > 960)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
@@ -449,7 +447,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
             strcat(graph[5], "  *");
             strcat(graph[6], "  *");
         }
-        else if (latestspeed >= 640)
+        else if (latestspeed > 640)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
@@ -459,7 +457,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
             strcat(graph[5], "  *");
             strcat(graph[6], "  *");
         }
-        else if (latestspeed >= 320)
+        else if (latestspeed > 320)
         {
             strcat(graph[0], "   ");
             strcat(graph[1], "   ");
@@ -499,6 +497,7 @@ char *makegraphstring(char **graph[BUFLEN][BUFLEN], float latestspeed, int time)
     return graphstring;
 }
 
+//makes a new pdu for each get/getnext/set
 netsnmp_pdu *makepdu(char myoid[], int getornextorset)
 {
     netsnmp_pdu *pdu;
@@ -523,6 +522,7 @@ netsnmp_pdu *makepdu(char myoid[], int getornextorset)
     return pdu;
 }
 
+//finds all interface ips
 char **findAllAddrs(netsnmp_session *ss, 
     int **alladdrs[BUFLEN][BUFLEN], int icounter)
 {
