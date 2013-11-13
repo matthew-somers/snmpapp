@@ -336,10 +336,10 @@ void monitor(netsnmp_session *ss, char oid[], int numsamples, int secondsinterva
     sprintf(graph[8], "\n    0");
     for (i = 0; i < numsamples; i++)
     {
-        if (i == numsamples-1)
+        if (i == numsamples-1 && i*secondsinterval > 9)
             strcat(graph[7], "-");
         strcat(graph[7], "---");
-        if (i >= 10)
+        if (i*secondsinterval >= 10)
             strcat(graph[8], " ");
         else
             strcat(graph[8], "  ");
